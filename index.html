@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Arrowverse Tracker</title>
+  <meta name="description" content="Dark sci-fi watch tracker for the Arrowverse in proper crossover order." />
+  <meta name="theme-color" content="#05070d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Arrowverse" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="brand">
+        <span class="brand-mark">◢◤</span>
+        <h1>ARROWVERSE <span class="accent">// TRACKER</span></h1>
+      </div>
+      <p class="tagline">Multiverse watch log &middot; episodes in true crossover order</p>
+
+      <div class="stats" id="stats">
+        <div class="stat">
+          <span class="stat-label">Watched</span>
+          <span class="stat-value" id="stat-watched">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Total</span>
+          <span class="stat-value" id="stat-total">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Progress</span>
+          <span class="stat-value" id="stat-percent">0%</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Next Up</span>
+          <span class="stat-value small" id="stat-next">—</span>
+        </div>
+      </div>
+
+      <div class="progress">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+
+      <div class="sync-row">
+        <button class="btn ghost tiny" id="history-toggle" type="button" aria-expanded="false" aria-controls="history-panel">History</button>
+        <button class="btn ghost tiny" id="settings-btn" type="button" aria-haspopup="dialog" aria-controls="settings-modal">Settings</button>
+        <button class="btn ghost tiny" id="sync-btn" type="button" title="Force sync with server">Sync</button>
+        <span id="sync-status" class="sync-status">Starting...</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="controls" aria-label="Filters and controls">
+      <div class="control-row">
+        <div class="search">
+          <span class="search-icon">⌕</span>
+          <input id="search" type="search" placeholder="Search episode, season, code..." aria-label="Search" />
+        </div>
+        <div class="toggles">
+          <label class="toggle">
+            <input type="checkbox" id="hide-watched" />
+            <span>Hide watched</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="only-next" />
+            <span>Jump to next</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button class="btn" id="mark-next">Mark next watched</button>
+          <button class="btn ghost" id="export-btn" title="Export progress">Export</button>
+          <button class="btn ghost" id="import-btn" title="Import progress">Import</button>
+          <button class="btn ghost" id="install-btn" title="Install app" hidden>Install</button>
+          <button class="btn danger" id="reset-btn" title="Clear progress">Reset</button>
+          <input type="file" id="import-file" accept="application/json" hidden />
+        </div>
+      </div>
+
+      <div class="show-filters" id="show-filters" aria-label="Filter by show"></div>
+    </section>
+
+    <section id="history-panel" class="history" aria-label="Recent activity" hidden>
+      <header class="history-head">
+        <h2>Recent activity</h2>
+        <p class="history-sub">Latest changes across all your devices.</p>
+      </header>
+      <ol id="history-list" class="history-list"></ol>
+      <p id="history-empty" class="empty-state" hidden>No activity yet. Mark an episode to get started.</p>
+    </section>
+
+    <section class="list" aria-label="Episode list">
+      <div class="list-header">
+        <span class="col-num">#</span>
+        <span class="col-show">Show</span>
+        <span class="col-code">Code</span>
+        <span class="col-title">Title</span>
+        <span class="col-date">Aired</span>
+        <span class="col-act">Status</span>
+      </div>
+      <div id="episode-list" class="episodes"></div>
+      <p id="empty-state" class="empty-state" hidden>No episodes match those filters.</p>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="settings-title">Settings &middot; Theme</h2>
+        <button class="modal-close" id="settings-close" type="button" aria-label="Close settings">×</button>
+      </div>
+      <p class="modal-sub">Pick a vibe. Your choice saves on this device.</p>
+      <div class="theme-grid" id="theme-grid" role="radiogroup" aria-label="Theme"></div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Data from <a href="https://arrowverse.info" target="_blank" rel="noopener">arrowverse.info</a> &middot; ordering by <a href="https://github.com/AceFire6/ordered-arrowverse" target="_blank" rel="noopener">AceFire6/ordered-arrowverse</a></span>
+    <span id="data-generated"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

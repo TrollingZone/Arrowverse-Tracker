@@ -1,0 +1,16 @@
+{
+  "name": "arrowverse-tracker",
+  "version": "1.0.0",
+  "description": "Dark sci-fi watch tracker for the Arrowverse (local-first PWA).",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "start:https": "node scripts/serve.js --https",
+    "build-data": "node scripts/build-data.js"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0",
+    "selfsigned": "^2.4.1"
+  }
+}

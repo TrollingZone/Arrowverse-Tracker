@@ -1,0 +1,6 @@
+node_modules/
+.cert/
+package-lock.json
+data/progress.json
+.DS_Store
+*.log

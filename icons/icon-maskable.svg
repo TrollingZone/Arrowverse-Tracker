@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#0f1629"/>
+      <stop offset="100%" stop-color="#05070d"/>
+    </radialGradient>
+    <linearGradient id="stroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4fd1ff"/>
+      <stop offset="100%" stop-color="#8a5bff"/>
+    </linearGradient>
+  </defs>
+  <!-- Safe zone for maskable icons is roughly the central 80%, so we keep the art inside ~51..461 -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g stroke="url(#stroke)" stroke-width="14" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M150 360 Q256 150 362 360"/>
+    <path d="M256 150 L256 400"/>
+    <path d="M222 232 L290 232"/>
+    <path d="M206 296 L306 296"/>
+    <path d="M256 150 L236 186 L256 176 L276 186 Z" fill="url(#stroke)" stroke="none"/>
+  </g>
+</svg>
