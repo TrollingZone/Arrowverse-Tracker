@@ -1,6 +1,6 @@
 // Offline support for the static shell. API calls to /api/* always
 // go to the network so progress stays authoritative on the server.
-const CACHE_VERSION = 'arrowverse-tracker-v5';
+const CACHE_VERSION = 'arrowverse-tracker-v11';
 const APP_SHELL = [
   './',
   './index.html',

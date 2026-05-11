@@ -93,7 +93,7 @@ body::before {
   z-index: 1;
 }
 
-html { transition: background-color 300ms ease, color 300ms ease; }
+html { transition: background-color 300ms ease, color 300ms ease; scroll-behavior: smooth; }
 body { transition: background 300ms ease, color 300ms ease; }
 
 /* ---- Hero / header ----------------------------------------------- */
@@ -301,26 +301,59 @@ body { transition: background 300ms ease, color 300ms ease; }
   gap: 10px;
   flex-wrap: wrap;
 }
-.toggle {
+.toggle-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 9px 16px 9px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 999px;
   background: rgba(15, 22, 41, 0.65);
   cursor: pointer;
-  font-size: 13px;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-dim);
   user-select: none;
+  transition: color 160ms ease, border-color 160ms ease,
+              background 160ms ease, box-shadow 160ms ease;
 }
-.toggle input { accent-color: var(--accent); }
-.toggle:has(input:checked) {
+.toggle-pill:hover {
   color: var(--text);
   border-color: var(--accent);
-  background: rgba(79, 209, 255, 0.1);
+}
+.toggle-pill input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.toggle-pill:focus-within {
+  box-shadow: 0 0 0 2px rgba(79, 209, 255, 0.28);
+}
+.toggle-pill .tp-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line-strong);
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.toggle-pill:has(input:checked) {
+  color: #061018;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  box-shadow: var(--glow);
+}
+.toggle-pill:has(input:checked) .tp-icon {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(0, 0, 0, 0.25);
+  color: #fff;
 }
 
 .actions {
@@ -427,6 +460,7 @@ body { transition: background 300ms ease, color 300ms ease; }
   position: relative;
   transition: background 140ms;
   --show-color: var(--accent);
+  scroll-margin-top: 80px;
 }
 .episode:hover { background: rgba(79, 209, 255, 0.04); }
 .episode::before {
@@ -1116,4 +1150,204 @@ footer {
   align-items: center;
   justify-content: center;
   font-weight: 700;
+}
+
+/* =============================================================
+   Transitions & animations
+   Goal: subtle, quick, and only where they help. Nothing bouncy.
+   ============================================================= */
+
+/* Smooth color/border changes throughout. */
+.btn, .chip, .watch-btn, .toggle-pill,
+.sync-status, .stat, .episode, .history-item, .theme-card {
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 120ms ease;
+}
+
+/* Press feedback (very slight). */
+.btn:active,
+.chip:active,
+.watch-btn:active,
+.toggle-pill:active,
+.theme-card:active {
+  transform: scale(0.98);
+}
+
+/* Episode row. `overflow: hidden` is applied only during the collapse
+   phase below so we don't clip the horizontal slide during phase 1. */
+.episode {
+  will-change: auto;
+}
+.episode.collapsing {
+  pointer-events: none;
+  transition:
+    height 260ms ease,
+    opacity 200ms ease,
+    padding 260ms ease,
+    margin 260ms ease,
+    border-color 200ms ease;
+}
+
+/* Progress bar: smooth width change, no shimmer. */
+.progress-bar {
+  transition: width 500ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* Settings modal: simple fade + tiny rise. */
+.modal-backdrop {
+  animation: modal-fade 180ms ease both;
+}
+.modal {
+  animation: modal-in 220ms cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Respect reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- Confirm modal ---------------------------------------------- */
+.modal.confirm {
+  max-width: 460px;
+}
+.confirm-body {
+  margin: 6px 0 18px;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-actions .btn {
+  min-width: 100px;
+}
+
+/* ---- Jump-to-next action pill (no input) ------------------------ */
+.toggle-pill.action {
+  color: var(--text-dim);
+  background: rgba(15, 22, 41, 0.65);
+  border-color: var(--line-strong);
+}
+.toggle-pill.action:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ---- Vanish effect when a watched row is hidden ---------------- */
+/*
+  Two-phase, keyframe-driven so it runs reliably regardless of what
+  `transition:` rules apply to .episode.
+
+  Phase 1: slide right + blur + fade.
+  Phase 2: collapse the row's vertical space to zero.
+  --vanish-h is set inline from JS to the row's current height so we can
+  animate height: var(--vanish-h) -> 0 without measuring in CSS.
+*/
+.episode.vanishing {
+  animation: row-vanish 280ms cubic-bezier(.4, 0, .2, 1) forwards;
+  pointer-events: none;
+  will-change: transform, opacity, filter, background;
+}
+@keyframes row-vanish {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  100% {
+    transform: translateX(32px) scale(0.96);
+    opacity: 0;
+    filter: blur(6px);
+    background: transparent;
+  }
+}
+
+.episode.collapsing {
+  animation: row-collapse 280ms cubic-bezier(.4, 0, .2, 1) forwards;
+  pointer-events: none;
+  overflow: hidden;
+  will-change: height, margin, padding;
+}
+@keyframes row-collapse {
+  0% {
+    height: var(--vanish-h, 60px);
+    padding-top: 12px;
+    padding-bottom: 12px;
+    border-bottom-width: 1px;
+    opacity: 0;
+  }
+  100% {
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-width: 0;
+    opacity: 0;
+  }
+}
+
+/* ---- Jump-to-next highlight ------------------------------------- */
+.episode.highlight {
+  animation: jump-highlight 1.8s ease-out;
+  position: relative;
+  z-index: 1;
+}
+@keyframes jump-highlight {
+  0% {
+    background: color-mix(in srgb, var(--accent) 32%, transparent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  50% {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+/* ---- Toast ------------------------------------------------------ */
+.toast-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 20px);
+  padding: 10px 16px;
+  background: rgba(10, 15, 28, 0.95);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 60;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(.2,.8,.2,1);
+}
+.toast-hint.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }

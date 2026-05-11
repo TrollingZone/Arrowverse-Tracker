@@ -18,11 +18,15 @@ Wi-Fi syncs to the same watch log.
 - **Offline-first PWA** - install on your home screen, launches fullscreen,
   keeps working with no signal. Edits queue in localStorage and flush when
   reachable again.
-- **13 themes** - a default Multiverse look plus one per show (Arrow,
-  Flash, Supergirl, Legends, Batwoman, Black Lightning, Superman & Lois,
+- **13 themes** - a default Multiverse look plus one per show (Arrow, Flash,
+  Supergirl, Legends, Batwoman, Black Lightning, Superman & Lois,
   Constantine, Vixen, Stargirl, Freedom Fighters) and a bonus Crisis theme.
-  Theme choice is per-device and applied before first paint.
-- **No hosting, no accounts, no tracking** - it only talks to your laptop.
+  Picked in Settings, per device, applied before first paint.
+- **Polished interactions** - smooth scroll to the next episode with a pulse
+  highlight, a slide + blur + collapse "vanish" when watched rows hide, an
+  in-app confirm dialog for Reset, and a branded Settings modal.
+- **No accounts, no tracking, no third-party calls at runtime** - the app
+  only talks to your laptop.
 - **Zero framework** - plain HTML / CSS / JS; the server is one Node file
   with two small dependencies.
 
@@ -100,29 +104,40 @@ network, keeps working when it's not.
 
 ### Tracking
 
-- Tap any row to toggle watched. Buttons are big enough for phones.
-- A pulsing **NEXT** pill marks the next unwatched episode.
-- Hotkey `N` marks the next episode; `/` focuses search.
-- **Hide watched** collapses everything you've already seen.
-- **Jump to next** trims the list down starting from where you are.
-- Search by title, code (`S03E01`), or show name.
-- Color-coded show filter chips to hide / show any series.
+- Tap any row to toggle watched, or use the per-row **Mark** pill.
+- A pulsing **NEXT** pill marks the next unwatched episode and moves as you
+  mark things off.
+- **Hide watched** - turn it on and every already-watched row slides out
+  with a staggered blur-and-collapse; further marks vanish the same way.
+- **Jump to next** - smooth-scrolls the list to the next episode and
+  pulses it with an accent glow. Clears the search for you if the next
+  episode is filtered out, and shows a toast if you're all caught up.
+- **Mark next watched** - one-tap button (and the `N` hotkey) to tick off
+  the current next episode without scrolling anywhere.
+- **Reset** - opens a themed in-app confirm dialog; Enter confirms, Escape
+  cancels, backdrop click dismisses. No more browser `confirm()` popup.
+- **Search** by title, season / episode code (`S03E01`), or show name
+  (`/` focuses it).
+- **Color-coded show chips** to hide or show any series individually.
 
 ### Sync
 
-- Every mark is optimistic - UI updates instantly, then it hits the API.
+- Every mark is optimistic - the UI updates instantly, then the API call
+  goes out.
 - Background refresh on tab focus, visibility change, reconnection, and a
-  light 15s poll while visible. A change on the phone shows up on the
-  laptop within seconds.
-- Offline edits queue in localStorage and flush on reconnection.
-- A sync status pill in the header shows: Synced / Syncing / Pending N /
-  Offline / Sync error.
+  light 15-second poll while visible. A change on the phone shows up on
+  the laptop within seconds.
+- Offline edits queue in localStorage and flush automatically on
+  reconnection.
+- The sync status pill in the header shows **Synced / Syncing / Pending N
+  / Offline / Sync error** at all times.
 
 ### History
 
 - Timeline of the last 100 activity events: watched, unwatched, reset,
   bulk replace.
-- Each entry shows relative time ("5m ago"), the episode, and the device.
+- Each entry shows relative time ("5m ago"), the episode (with show
+  accent color), and the device.
 - Device names auto-generate the first time a browser hits the app
   (e.g. `iPhone-a4k2`, `Windows-3xq9`) and live in that browser's
   localStorage.
@@ -132,7 +147,15 @@ network, keeps working when it's not.
 13 themes available in Settings: the default **Multiverse** plus one for
 each show (and a Crisis bonus). Themes swap backgrounds, accents, halos,
 and glows while keeping show accent colors intact so you can always tell
-series apart.
+series apart. The mobile browser chrome bar re-tints to match each theme.
+
+## Keyboard shortcuts
+
+| Key | Action                           |
+| --- | -------------------------------- |
+| `N` | Mark the next unwatched episode  |
+| `/` | Focus the search field           |
+| `Esc` | Close an open modal            |
 
 ## Commands
 
@@ -173,8 +196,9 @@ so concurrent requests from multiple devices can't clobber each other.
 - **Multiple LAN IPs listed.** Virtual adapters (WSL, Hyper-V, VirtualBox,
   VMware, VPN) show up too. Pick the IP on the same subnet as your phone.
 - **Wrong port.** `node scripts/serve.js --port 5000`.
-- **PWA install prompt never appears.** You need HTTPS - run
-  `npm run start:https`. `http://LAN-IP` works but can't install.
+- **PWA install prompt never appears.** Browsers require HTTPS - run
+  `npm run start:https`. Plain `http://LAN-IP` works for day-to-day use but
+  can't be installed.
 - **Phone shows old data after updating.** Bump `CACHE_VERSION` in `sw.js`
   and hard-refresh, or uninstall and reinstall the PWA.
 
@@ -193,8 +217,8 @@ git commit -m "Refresh episode data"
 
 ```
 index.html                  Page shell
-styles.css                  Dark sci-fi theme + per-show theme overrides
-app.js                      Rendering, state, persistence, sync, themes, PWA
+styles.css                  Dark sci-fi theme + per-show theme overrides + animations
+app.js                      Rendering, state, persistence, sync, themes, PWA, animations
 sw.js                       Service worker (offline cache)
 manifest.webmanifest        PWA manifest
 icons/                      SVG app icons
@@ -203,6 +227,7 @@ data/progress.json          Your watched list + history (gitignored)
 scripts/serve.js            Local LAN server: HTTP(S) + QR + REST API
 scripts/build-data.js       Fetches + parses arrowverse.info into JSON
 .cert/                      Self-signed cert for HTTPS (gitignored)
+docs/                       Screenshots and capture tips
 ```
 
 ## Privacy
@@ -222,7 +247,7 @@ public network, keep it bound to localhost only with
 
 ## Contributing
 
-PRs welcome. Things that would make good contributions:
+PRs welcome. Nice first issues:
 
 - Additional themes
 - Per-show progress rings in the stats row

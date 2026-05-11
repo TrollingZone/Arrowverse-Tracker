@@ -56,7 +56,6 @@ const state = {
   hiddenShows: new Set(),
   query: '',
   hideWatched: false,
-  onlyNext: false,
   // Sync status:
   online: navigator.onLine,
   syncing: false,
@@ -167,7 +166,6 @@ function loadPrefs() {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed.hiddenShows)) state.hiddenShows = new Set(parsed.hiddenShows);
     if (typeof parsed.hideWatched === 'boolean') state.hideWatched = parsed.hideWatched;
-    if (typeof parsed.onlyNext === 'boolean') state.onlyNext = parsed.onlyNext;
   } catch (e) {
     console.warn('Could not load prefs:', e);
   }
@@ -179,7 +177,6 @@ function savePrefs() {
     JSON.stringify({
       hiddenShows: [...state.hiddenShows],
       hideWatched: state.hideWatched,
-      onlyNext: state.onlyNext,
     })
   );
 }
@@ -251,19 +248,39 @@ async function apiFetch(url, options = {}) {
 
 function applyServerState(serverState) {
   if (!serverState) return;
-  state.watched = new Set(serverState.watched || []);
+  const prevWatched = state.watched;
+  const newWatched = new Set(serverState.watched || []);
+  const sameWatched =
+    prevWatched.size === newWatched.size &&
+    [...prevWatched].every((id) => newWatched.has(id));
+
+  state.watched = newWatched;
   state.history = serverState.history || [];
   state.serverVersion = serverState.version || 0;
   saveCache();
+  return { sameWatched };
+}
+
+// Are there any rows currently vanishing? If so, don't clobber the list.
+function listIsAnimating() {
+  return !!document.querySelector('.episode.vanishing, .episode.collapsing');
 }
 
 async function pullFromServer() {
   try {
     setSyncing(true);
     const data = await apiFetch('/api/progress');
-    applyServerState(data);
+    const res = applyServerState(data);
     state.lastError = null;
-    renderAll();
+    // Only re-render the full list if the server actually has different
+    // watched data than we already do; otherwise we'd kill any in-flight
+    // vanish animations. Stats/history/sync are cheap and safe to refresh.
+    renderStats();
+    renderHistory();
+    renderSync();
+    if (res && !res.sameWatched && !listIsAnimating()) {
+      renderList();
+    }
   } catch (e) {
     state.lastError = e.message;
     renderSync();
@@ -306,7 +323,11 @@ async function flushQueue() {
       setSyncing(false);
     }
   }
-  renderAll();
+  // Refresh cheap panels, but leave the episode list alone so any vanish
+  // animation still in progress can finish without getting wiped out.
+  renderStats();
+  renderHistory();
+  renderSync();
 }
 
 async function syncNow() {
@@ -358,6 +379,10 @@ function renderStats() {
   document.getElementById('progress-bar').style.width = pct + '%';
 }
 
+function reducedMotion() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function renderShowFilters() {
   const container = document.getElementById('show-filters');
   container.innerHTML = '';
@@ -386,15 +411,11 @@ function renderShowFilters() {
 function renderList() {
   const container = document.getElementById('episode-list');
   const empty = document.getElementById('empty-state');
-  container.innerHTML = '';
 
   const next = getNextEpisode();
-  let rows = state.data.episodes.filter(matchesFilters);
-  if (state.onlyNext && next) {
-    const nextIdx = rows.findIndex((e) => e.id === next.id);
-    if (nextIdx > 0) rows = rows.slice(nextIdx);
-  }
+  const rows = state.data.episodes.filter(matchesFilters);
 
+  container.innerHTML = '';
   if (rows.length === 0) {
     empty.hidden = false;
     return;
@@ -402,36 +423,38 @@ function renderList() {
   empty.hidden = true;
 
   const frag = document.createDocumentFragment();
-  for (const ep of rows) {
-    const row = document.createElement('div');
-    const isWatched = state.watched.has(ep.id);
-    row.className =
-      'episode' + (isWatched ? ' watched' : '') + (next && ep.id === next.id ? ' next-up' : '');
-    row.style.setProperty('--show-color', SHOW_COLOR[ep.show] || 'var(--accent)');
-    row.dataset.id = ep.id;
-
-    const titleHtml = ep.sourceUrl
-      ? `<a href="${ep.sourceUrl}" target="_blank" rel="noopener">${escapeHtml(ep.title)}</a>`
-      : escapeHtml(ep.title);
-    const isNext = next && ep.id === next.id;
-    const nextPill = isNext ? '<span class="next-pill">NEXT</span>' : '';
-
-    row.innerHTML = `
-      <span class="e-num">${ep.id.toString().padStart(3, '0')}</span>
-      <span class="e-show"><span class="dot"></span>${escapeHtml(ep.series)}</span>
-      <span class="e-code">${escapeHtml(ep.code)}</span>
-      <span class="e-title">${nextPill}${titleHtml}</span>
-      <span class="e-date">${escapeHtml(ep.airDate)}</span>
-      <span class="e-act">
-        <button class="watch-btn" type="button" aria-pressed="${isWatched}">
-          <span class="check"></span>
-          ${isWatched ? 'Watched' : 'Mark'}
-        </button>
-      </span>
-    `;
-    frag.appendChild(row);
-  }
+  for (const ep of rows) frag.appendChild(buildRow(ep, next));
   container.appendChild(frag);
+}
+
+function buildRow(ep, next) {
+  const row = document.createElement('div');
+  const isWatched = state.watched.has(ep.id);
+  const isNext = next && ep.id === next.id;
+  row.className =
+    'episode' + (isWatched ? ' watched' : '') + (isNext ? ' next-up' : '');
+  row.style.setProperty('--show-color', SHOW_COLOR[ep.show] || 'var(--accent)');
+  row.dataset.id = ep.id;
+
+  const titleHtml = ep.sourceUrl
+    ? `<a href="${ep.sourceUrl}" target="_blank" rel="noopener">${escapeHtml(ep.title)}</a>`
+    : escapeHtml(ep.title);
+  const nextPill = isNext ? '<span class="next-pill">NEXT</span>' : '';
+
+  row.innerHTML = `
+    <span class="e-num">${ep.id.toString().padStart(3, '0')}</span>
+    <span class="e-show"><span class="dot"></span>${escapeHtml(ep.series)}</span>
+    <span class="e-code">${escapeHtml(ep.code)}</span>
+    <span class="e-title">${nextPill}${titleHtml}</span>
+    <span class="e-date">${escapeHtml(ep.airDate)}</span>
+    <span class="e-act">
+      <button class="watch-btn" type="button" aria-pressed="${isWatched}">
+        <span class="check"></span>
+        ${isWatched ? 'Watched' : 'Mark'}
+      </button>
+    </span>
+  `;
+  return row;
 }
 
 function renderHistory() {
@@ -554,24 +577,143 @@ function toggleWatched(id, force) {
   });
   saveCache();
 
+  animateRowToggle(id, wantWatched);
   renderStats();
-  renderList();
   renderHistory();
 
   enqueue({ type: 'toggle', id, watched: wantWatched });
   flushQueue();
 }
 
+// Targeted update for a single row so we don't rebuild the whole list.
+// Moves the NEXT pill to the new next-up episode, and smoothly collapses
+// the row away when "Hide watched" is on.
+function animateRowToggle(id, wantWatched) {
+  const row = document.querySelector(`.episode[data-id="${id}"]`);
+  if (!row) {
+    renderList();
+    return;
+  }
+  row.classList.toggle('watched', wantWatched);
+  const btn = row.querySelector('.watch-btn');
+  if (btn) {
+    btn.setAttribute('aria-pressed', wantWatched ? 'true' : 'false');
+    btn.innerHTML = `<span class="check"></span>${wantWatched ? 'Watched' : 'Mark'}`;
+  }
+
+  // Reposition the NEXT pill.
+  const newNext = getNextEpisode();
+  const lastNext = document.querySelector('.episode.next-up');
+  if (lastNext && (!newNext || lastNext.dataset.id !== String(newNext.id))) {
+    lastNext.classList.remove('next-up');
+    const oldPill = lastNext.querySelector('.next-pill');
+    if (oldPill) oldPill.remove();
+  }
+  if (newNext) {
+    const nextRow = document.querySelector(`.episode[data-id="${newNext.id}"]`);
+    if (nextRow && !nextRow.classList.contains('next-up')) {
+      nextRow.classList.add('next-up');
+      const title = nextRow.querySelector('.e-title');
+      if (title && !title.querySelector('.next-pill')) {
+        const pill = document.createElement('span');
+        pill.className = 'next-pill';
+        pill.textContent = 'NEXT';
+        title.prepend(pill);
+      }
+    }
+  }
+
+  if (wantWatched && state.hideWatched) collapseRemove(row);
+}
+
+// Animate every currently-visible watched row out in a little stagger when
+// the user flips "Hide watched" on. Feels much nicer than a snap re-render.
+function vanishWatchedRows() {
+  const rows = [...document.querySelectorAll('.episode.watched')];
+  if (rows.length === 0) return;
+  rows.forEach((row, i) => {
+    setTimeout(() => collapseRemove(row), Math.min(i * 30, 240));
+  });
+}
+
+function collapseRemove(el) {
+  if (reducedMotion()) { el.remove(); return; }
+
+  // Lock the current height so we can animate it to 0, and mark the row
+  // as vanishing. CSS runs the slide+blur+fade animation, then an explicit
+  // collapse animation once phase 1 finishes via `animationend`.
+  const h = el.getBoundingClientRect().height;
+  el.style.setProperty('--vanish-h', h + 'px');
+  el.classList.add('vanishing');
+
+  const onVanishEnd = (e) => {
+    if (e.animationName !== 'row-vanish') return;
+    el.removeEventListener('animationend', onVanishEnd);
+    el.classList.add('collapsing');
+  };
+  const onCollapseEnd = (e) => {
+    if (e.animationName !== 'row-collapse') return;
+    el.removeEventListener('animationend', onCollapseEnd);
+    if (el.isConnected) el.remove();
+  };
+  el.addEventListener('animationend', onVanishEnd);
+  el.addEventListener('animationend', onCollapseEnd);
+
+  // Safety net in case animationend doesn't fire (tab hidden, etc.)
+  setTimeout(() => { if (el.isConnected) el.remove(); }, 900);
+}
+
 function markNextWatched() {
   const next = getNextEpisode();
   if (!next) return;
   toggleWatched(next.id, true);
-  requestAnimationFrame(() => {
-    const nextAfter = getNextEpisode();
-    if (!nextAfter) return;
-    const el = document.querySelector(`.episode[data-id="${nextAfter.id}"]`);
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  });
+}
+
+// Smooth scroll to the current "next" episode and pulse it for a moment.
+// If "hide watched" is on the NEXT is already the first visible row; either
+// way we just find whichever row is marked .next-up in the DOM.
+function jumpToNext() {
+  const next = getNextEpisode();
+  if (!next) {
+    toastHint('All caught up!');
+    return;
+  }
+  // Make sure the row is actually in the list right now (it could be
+  // filtered out by search or show chips).
+  let el = document.querySelector(`.episode[data-id="${next.id}"]`);
+  if (!el) {
+    const search = document.getElementById('search');
+    if (search && search.value) {
+      search.value = '';
+      state.query = '';
+      renderList();
+      el = document.querySelector(`.episode[data-id="${next.id}"]`);
+    }
+  }
+  if (!el) {
+    toastHint('Next episode is filtered out.');
+    return;
+  }
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.remove('highlight');
+  void el.offsetWidth; // reflow so the class re-applies
+  el.classList.add('highlight');
+  setTimeout(() => el.classList.remove('highlight'), 1800);
+}
+
+// Tiny ephemeral toast. Creates the element on demand.
+function toastHint(msg) {
+  let t = document.getElementById('toast-hint');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-hint';
+    t.className = 'toast-hint';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
 function exportProgress() {
@@ -612,13 +754,64 @@ function importProgress(file) {
 }
 
 function resetProgress() {
-  if (!confirm('Clear all watched episodes on the server? This cannot be undone.')) return;
-  state.watched.clear();
-  saveCache();
-  renderStats();
-  renderList();
-  enqueue({ type: 'reset' });
-  flushQueue();
+  confirmDialog({
+    title: 'Reset progress',
+    body:
+      'This will clear every watched episode on the server (all devices) and cannot be undone. Continue?',
+    okLabel: 'Reset everything',
+  }).then((ok) => {
+    if (!ok) return;
+    state.watched.clear();
+    saveCache();
+    renderStats();
+    renderList();
+    enqueue({ type: 'reset' });
+    flushQueue();
+  });
+}
+
+// In-app confirmation dialog. Returns a promise that resolves true/false.
+function confirmDialog({ title = 'Confirm', body = 'Are you sure?', okLabel = 'Confirm' } = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirm-modal');
+    const titleEl = document.getElementById('confirm-title');
+    const bodyEl = document.getElementById('confirm-body');
+    const okBtn = document.getElementById('confirm-ok');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const closeBtn = document.getElementById('confirm-close');
+    if (!modal) { resolve(window.confirm(body)); return; }
+
+    titleEl.textContent = title;
+    bodyEl.textContent = body;
+    okBtn.textContent = okLabel;
+
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => okBtn.focus());
+
+    const cleanup = (result) => {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      closeBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    const onBackdrop = (e) => { if (e.target === modal) cleanup(false); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') cleanup(false);
+      if (e.key === 'Enter' && document.activeElement !== cancelBtn) cleanup(true);
+    };
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    closeBtn.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
 }
 
 // ---------- Wire up ----------------------------------------------------
@@ -641,18 +834,19 @@ function bindEvents() {
   const hideWatched = document.getElementById('hide-watched');
   hideWatched.checked = state.hideWatched;
   hideWatched.addEventListener('change', () => {
+    const wasOn = state.hideWatched;
     state.hideWatched = hideWatched.checked;
     savePrefs();
-    renderList();
+    if (!wasOn && state.hideWatched) {
+      // Turning ON: animate every already-watched row out with a stagger.
+      vanishWatchedRows();
+    } else {
+      renderList();
+    }
   });
 
-  const onlyNext = document.getElementById('only-next');
-  onlyNext.checked = state.onlyNext;
-  onlyNext.addEventListener('change', () => {
-    state.onlyNext = onlyNext.checked;
-    savePrefs();
-    renderList();
-  });
+  const jumpBtn = document.getElementById('jump-next');
+  if (jumpBtn) jumpBtn.addEventListener('click', jumpToNext);
 
   document.getElementById('mark-next').addEventListener('click', markNextWatched);
   document.getElementById('export-btn').addEventListener('click', exportProgress);
