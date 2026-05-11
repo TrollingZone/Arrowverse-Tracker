@@ -47,8 +47,8 @@ of Tomorrow &middot; Stargirl &middot; Supergirl &middot; Superman & Lois
 
 ```bash
 # Clone
-git clone https://github.com/<your-username>/arrowverse-tracker.git
-cd arrowverse-tracker
+git clone https://github.com/TrollingZone/Arrowverse-Tracker.git
+cd Arrowverse-Tracker
 
 # One-time setup
 npm install
