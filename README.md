@@ -36,9 +36,6 @@ Wi-Fi syncs to the same watch log.
 
 ![Settings](docs/settings.png)
 
-> Add your own screenshots at `docs/main-view.png` and `docs/settings.png`.
-> See [`docs/README.md`](docs/README.md) for tips on capturing them.
-
 ## Shows tracked
 
 Arrow &middot; Batwoman &middot; Black Lightning &middot; Constantine
