@@ -1,6 +1,10 @@
 // Offline support for the static shell. API calls to /api/* always
 // go to the network so progress stays authoritative on the server.
-const CACHE_VERSION = 'arrowverse-tracker-v11';
+// Bump this whenever data/episodes.json or the app shell changes, otherwise
+// installed clients keep serving the stale precached copy. v13 = deduplicated
+// 828-episode dataset (see scripts/normalize-data.js). v14 = Stargirl S01E13
+// title styling aligned.
+const CACHE_VERSION = 'arrowverse-tracker-v14';
 const APP_SHELL = [
   './',
   './index.html',

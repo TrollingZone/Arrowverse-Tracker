@@ -24,7 +24,9 @@ const os = require('os');
 
 const ROOT = path.join(__dirname, '..');
 const PROGRESS_PATH = path.join(ROOT, 'data', 'progress.json');
-const HISTORY_LIMIT = 1000;
+// UI only renders the most recent 100 entries, so 200 is plenty of
+// headroom and keeps the JSON payload small for polling clients.
+const HISTORY_LIMIT = 200;
 
 // ---- progress store ---------------------------------------------------
 // Single-user store persisted as JSON on disk. Writes are serialized
@@ -216,6 +218,19 @@ async function handleApi(req, res, url) {
   const route = url.pathname;
 
   if (route === '/api/progress' && req.method === 'GET') {
+    // Polling clients can pass ?since=<version>. If our state hasn't moved
+    // past it we reply 304 with no body, so the client (and the network)
+    // can skip the work entirely. Massively cuts overhead during long
+    // sessions where most polls are noise.
+    const since = parseInt(url.searchParams.get('since') || '', 10);
+    if (Number.isFinite(since) && since === store.version) {
+      res.writeHead(304, {
+        'cache-control': 'no-store',
+        'access-control-allow-origin': '*',
+        'x-version': String(store.version),
+      });
+      return res.end();
+    }
     return sendJson(res, 200, store);
   }
 

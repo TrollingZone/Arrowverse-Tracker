@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { normalizeEpisodes } = require('./normalize-data');
 
 const SOURCE_URL = 'https://arrowverse.info/';
 const OUTPUT_PATH = path.join(__dirname, '..', 'data', 'episodes.json');
@@ -92,26 +93,16 @@ function parseEpisodes(html) {
   return episodes;
 }
 
-function buildShows(episodes) {
-  const byShow = new Map();
-  for (const ep of episodes) {
-    if (!byShow.has(ep.show)) {
-      byShow.set(ep.show, { slug: ep.show, name: ep.series, count: 0, firstId: ep.id, lastId: ep.id });
-    }
-    const entry = byShow.get(ep.show);
-    entry.count += 1;
-    entry.firstId = Math.min(entry.firstId, ep.id);
-    entry.lastId = Math.max(entry.lastId, ep.id);
-  }
-  return [...byShow.values()].sort((a, b) => a.firstId - b.firstId);
-}
-
 async function main() {
   console.log('Fetching', SOURCE_URL);
   const html = await fetch(SOURCE_URL);
-  const episodes = parseEpisodes(html);
-  if (episodes.length === 0) throw new Error('No episodes parsed - layout may have changed.');
-  const shows = buildShows(episodes);
+  const rawEpisodes = parseEpisodes(html);
+  if (rawEpisodes.length === 0) throw new Error('No episodes parsed - layout may have changed.');
+
+  // The upstream table has duplicate rows, malformed codes and at least one
+  // missing episode. normalize-data.js repairs all of that, so a re-scrape
+  // can't quietly undo the fixes. See that file for the details.
+  const { episodes, shows, notes } = normalizeEpisodes(rawEpisodes);
 
   const payload = {
     source: SOURCE_URL,
@@ -122,7 +113,25 @@ async function main() {
 
   fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(payload));
+
+  console.log(`Scraped ${rawEpisodes.length} rows, kept ${episodes.length} after cleanup.`);
+  for (const n of notes) {
+    if (n.type === 'duplicate-removed') {
+      console.log(`  removed duplicate ${n.show} ${n.code} ${JSON.stringify(n.removedTitle)}`);
+    } else if (n.type === 'code-repaired') {
+      console.log(`  repaired code ${JSON.stringify(n.from)} -> ${JSON.stringify(n.to)} (${JSON.stringify(n.title)})`);
+    } else if (n.type === 'episode-added') {
+      console.log(`  added missing ${n.show} ${n.code} ${JSON.stringify(n.title)}`);
+    } else if (n.type === 'title-overridden') {
+      console.log(`  retitled ${n.show} ${n.code} ${JSON.stringify(n.from)} -> ${JSON.stringify(n.to)}`);
+    }
+  }
   console.log(`Wrote ${episodes.length} episodes across ${shows.length} shows to ${OUTPUT_PATH}`);
+
+  if (notes.some((n) => n.type === 'duplicate-removed' || n.type === 'episode-added')) {
+    console.log('\nNOTE: episode ids were renumbered. If you re-scrape after');
+    console.log('watching episodes, check data/progress.json still lines up.');
+  }
 }
 
 main().catch((err) => {

@@ -1,6 +1,13 @@
 node_modules/
 .cert/
 package-lock.json
-data/progress.json
 .DS_Store
 *.log
+
+# Personal watch progress - never publish this.
+data/progress.json
+
+# Timestamped backups written by scripts/fix-data.js. The progress.json ones
+# contain personal watch data, so keep the whole family out of the repo.
+*.bak-*
+*.tmp

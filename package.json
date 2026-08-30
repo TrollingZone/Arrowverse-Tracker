@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node scripts/serve.js",
     "start:https": "node scripts/serve.js --https",
-    "build-data": "node scripts/build-data.js"
+    "build-data": "node scripts/build-data.js",
+    "fix-data": "node scripts/fix-data.js",
+    "fix-data:check": "node scripts/fix-data.js --dry-run"
   },
   "dependencies": {
     "qrcode-terminal": "^0.12.0",

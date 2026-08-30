@@ -195,11 +195,14 @@ function loadCache() {
 }
 
 function saveCache() {
+  // Trim cached history to what the offline view actually shows; the
+  // server is the source of truth and keeps more.
+  const trimmedHistory = state.history.slice(-100);
   localStorage.setItem(
     CACHE_KEY,
     JSON.stringify({
       watched: [...state.watched],
-      history: state.history,
+      history: trimmedHistory,
       version: state.serverVersion,
     })
   );
@@ -242,12 +245,23 @@ async function apiFetch(url, options = {}) {
       ...(options.headers || {}),
     },
   });
+  // 304 from /api/progress?since= means "nothing changed" - normalize so
+  // callers can short-circuit without parsing.
+  if (res.status === 304) return { __notModified: true };
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
 
 function applyServerState(serverState) {
-  if (!serverState) return;
+  if (!serverState || serverState.__notModified) return { sameVersion: true, sameWatched: true };
+
+  const newVersion = serverState.version || 0;
+  if (newVersion === state.serverVersion) {
+    // Same logical state - skip the localStorage write and the watched
+    // diff. This is the common case during quiet polling.
+    return { sameVersion: true, sameWatched: true };
+  }
+
   const prevWatched = state.watched;
   const newWatched = new Set(serverState.watched || []);
   const sameWatched =
@@ -256,9 +270,9 @@ function applyServerState(serverState) {
 
   state.watched = newWatched;
   state.history = serverState.history || [];
-  state.serverVersion = serverState.version || 0;
+  state.serverVersion = newVersion;
   saveCache();
-  return { sameWatched };
+  return { sameVersion: false, sameWatched };
 }
 
 // Are there any rows currently vanishing? If so, don't clobber the list.
@@ -266,17 +280,31 @@ function listIsAnimating() {
   return !!document.querySelector('.episode.vanishing, .episode.collapsing');
 }
 
+function isHistoryOpen() {
+  const panel = document.getElementById('history-panel');
+  return !!panel && !panel.hasAttribute('hidden');
+}
+
 async function pullFromServer() {
   try {
     setSyncing(true);
-    const data = await apiFetch('/api/progress');
+    // Pass our last known version so the server can short-circuit with 304.
+    const url = '/api/progress?since=' + (state.serverVersion || 0);
+    const data = await apiFetch(url);
     const res = applyServerState(data);
     state.lastError = null;
-    // Only re-render the full list if the server actually has different
-    // watched data than we already do; otherwise we'd kill any in-flight
-    // vanish animations. Stats/history/sync are cheap and safe to refresh.
+
+    // Quiet path: nothing changed on the server. Just refresh the indicator.
+    if (res && res.sameVersion) {
+      renderSync();
+      return;
+    }
+
+    // Real change - refresh stats, sync indicator, and (only if visible)
+    // history. The list re-renders only when watched actually differs and
+    // there's no in-flight vanish animation to clobber.
     renderStats();
-    renderHistory();
+    if (isHistoryOpen()) renderHistory();
     renderSync();
     if (res && !res.sameWatched && !listIsAnimating()) {
       renderList();
@@ -313,9 +341,14 @@ async function flushQueue() {
           body: JSON.stringify({ device }),
         });
       }
+      const before = state.serverVersion;
       applyServerState(result);
       state.pendingQueue.shift();
       saveQueue();
+      if (state.serverVersion !== before) {
+        renderStats();
+        if (isHistoryOpen()) renderHistory();
+      }
     } catch (e) {
       state.lastError = e.message;
       break; // stop, try again later
@@ -323,10 +356,6 @@ async function flushQueue() {
       setSyncing(false);
     }
   }
-  // Refresh cheap panels, but leave the episode list alone so any vanish
-  // animation still in progress can finish without getting wiped out.
-  renderStats();
-  renderHistory();
   renderSync();
 }
 
@@ -457,12 +486,22 @@ function buildRow(ep, next) {
   return row;
 }
 
+// Cache episode-by-id lookup. Episodes are loaded once at startup, so
+// rebuilding this Map per render was pure waste over long sessions.
+let _episodeIndex = null;
+function getEpisodeIndex() {
+  if (!_episodeIndex) {
+    _episodeIndex = new Map(state.data.episodes.map((ep) => [ep.id, ep]));
+  }
+  return _episodeIndex;
+}
+
 function renderHistory() {
   const list = document.getElementById('history-list');
   const empty = document.getElementById('history-empty');
   if (!list) return;
 
-  const byId = new Map(state.data.episodes.map((ep) => [ep.id, ep]));
+  const byId = getEpisodeIndex();
   const entries = [...state.history].reverse().slice(0, 100);
   list.innerHTML = '';
 
@@ -909,10 +948,12 @@ function bindEvents() {
   });
   window.addEventListener('focus', () => syncNow());
 
-  // Light polling so other devices' changes show up within a few seconds.
+  // Light polling so other devices' changes show up. Visible tabs only,
+  // and we also pull on focus / visibility / reconnect for a quick refresh
+  // when you come back to the tab.
   setInterval(() => {
     if (state.online && document.visibilityState === 'visible') pullFromServer();
-  }, 15000);
+  }, 30000);
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;

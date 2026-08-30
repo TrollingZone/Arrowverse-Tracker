@@ -5,9 +5,11 @@ progress in true crossover order. Dark sci-fi aesthetic, 13 built-in themes
 (one per show), installable on phone and desktop, and every device on your
 Wi-Fi syncs to the same watch log.
 
-830+ episodes across 11 shows, ordered by air date, sourced from
+828 episodes across 11 shows, ordered by air date, sourced from
 [arrowverse.info](https://arrowverse.info/) (built on
-[AceFire6/ordered-arrowverse](https://github.com/AceFire6/ordered-arrowverse)).
+[AceFire6/ordered-arrowverse](https://github.com/AceFire6/ordered-arrowverse))
+and cleaned up by `scripts/normalize-data.js` - see
+[Data quality](#data-quality).
 
 ## Highlights
 
@@ -163,6 +165,8 @@ series apart. The mobile browser chrome bar re-tints to match each theme.
 npm start                   # HTTP server on :8080, LAN-accessible
 npm run start:https         # HTTPS on :8443 (for PWA install on phone)
 npm run build-data          # Re-scrape arrowverse.info -> data/episodes.json
+npm run fix-data            # Re-apply data cleanup to the committed JSON
+npm run fix-data:check      # Same, but read-only (reports, writes nothing)
 ```
 
 `scripts/serve.js` flags:
@@ -226,9 +230,40 @@ data/episodes.json          Generated episode dataset (committed)
 data/progress.json          Your watched list + history (gitignored)
 scripts/serve.js            Local LAN server: HTTP(S) + QR + REST API
 scripts/build-data.js       Fetches + parses arrowverse.info into JSON
+scripts/normalize-data.js   Data-quality fixes applied to every scrape
+scripts/fix-data.js         Applies those fixes to the committed JSON
 .cert/                      Self-signed cert for HTTPS (gitignored)
 docs/                       Screenshots and capture tips
 ```
+
+## Data quality
+
+The upstream table at arrowverse.info has a few defects that make a raw
+scrape untrustworthy, so `scripts/normalize-data.js` repairs them as part of
+every build:
+
+- **Duplicate rows.** Three Stargirl season 1 episodes appeared twice, the
+  copies differing only in title punctuation (`Shiv: Part 2` vs
+  `Shiv Part Two`). Deduplicated on show + season + episode.
+- **A missing episode.** Stargirl `S01E11` ("Shining Knight") was absent
+  entirely, leaving a gap between E10 and E12. Restored.
+- **A malformed code.** The pre-season *Crisis on Infinite Earths: Part Five*
+  special was coded `S05E0—` with an em-dash. Normalized to `S05E00`, the
+  conventional slot for a special that airs outside the numbered season.
+  "Meet the Legends" remains the legitimate `S05E01` season premiere.
+- **Inconsistent title styling** across the Stargirl two-parters, aligned to
+  one convention.
+
+Raw scrape: 830 rows. After cleanup: **828 episodes**, with no duplicate ids,
+no duplicate show/season/episode, no gaps inside any season, and every code
+matching `SxxEyy`. `npm run fix-data:check` verifies all of that and writes
+nothing.
+
+Two titles that look like bugs but are correct and are deliberately left
+alone: Legends `S07E03` "wvrdr_error_100 not found" (the show's 100th
+episode, stylized as a machine error) and `S07E09` "Lowest Common
+Demoninator" (the misspelling is in the official title as shipped by The CW
+and every streaming service).
 
 ## Privacy
 
